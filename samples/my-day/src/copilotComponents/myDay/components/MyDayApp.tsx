@@ -4,6 +4,8 @@ import type { SPCopilotDisplayMode, SPCopilotTheme } from '@microsoft/sp-copilot
 
 import type { IMyDayCopilotComponentProperties } from '../MyDayCopilotComponentProperties';
 import type { IUser } from '../models/myDay';
+import type { IMyDayDataService, MyDayDataSource } from '../services/IMyDayDataService';
+import { MockMyDayDataService } from '../services/MockMyDayDataService';
 import MyDayFullscreen from './MyDayFullscreen';
 import MyDayInline from './MyDayInline';
 import MyDayThemeProvider from './MyDayThemeProvider';
@@ -19,6 +21,11 @@ import MyDayThemeProvider from './MyDayThemeProvider';
 export interface IMyDayAppProps extends IMyDayCopilotComponentProperties {
   /** Signed-in user resolved from the SPFx page context. */
   currentUser?: IUser;
+  /**
+   * Builds (and caches) the data service for a source. Supplied by the SPFx
+   * component so the React tree never touches `@microsoft/sp-http`.
+   */
+  createDataService?: (source: MyDayDataSource) => IMyDayDataService;
   /** Color theme advertised by the Copilot host. */
   theme?: SPCopilotTheme;
   /** Container display mode advertised by the Copilot host. */
@@ -29,6 +36,9 @@ export interface IMyDayAppProps extends IMyDayCopilotComponentProperties {
   onRequestFullscreen?: () => void;
 }
 
+/** Used when no factory is supplied (e.g. tests, storybook-style hosting). */
+const mockOnly = (): IMyDayDataService => new MockMyDayDataService();
+
 /**
  * Baseline root component rendered into the Copilot host DOM element.
  *
@@ -36,15 +46,31 @@ export interface IMyDayAppProps extends IMyDayCopilotComponentProperties {
  * {@link MyDayFullscreen}) from the host-advertised display mode.
  */
 const MyDayApp: React.FunctionComponent<IMyDayAppProps> = (props) => {
-  const { message, currentUser, theme, displayMode, onRequestFullscreen } = props;
+  const {
+    message,
+    dataSource,
+    currentUser,
+    createDataService = mockOnly,
+    theme,
+    displayMode,
+    onRequestFullscreen
+  } = props;
 
   const view =
     displayMode === 'fullscreen' ? (
-      <MyDayFullscreen message={message} currentUser={currentUser} theme={theme} />
+      <MyDayFullscreen
+        message={message}
+        dataSource={dataSource}
+        currentUser={currentUser}
+        createDataService={createDataService}
+        theme={theme}
+      />
     ) : (
       <MyDayInline
         message={message}
+        dataSource={dataSource}
         currentUser={currentUser}
+        createDataService={createDataService}
         theme={theme}
         onRequestFullscreen={onRequestFullscreen}
       />

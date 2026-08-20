@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import type { MyDayDataSource } from '../services/IMyDayDataService';
+
 /** Identifiers for the dashboard panels the user can show or hide. */
 export const PANEL_IDS = [
   'agenda',
@@ -23,12 +25,17 @@ export type PanelId = (typeof PANEL_IDS)[number];
 export interface IMyDaySettings {
   /** When `true`, temperatures are shown primarily in Fahrenheit. */
   useFahrenheit: boolean;
-  /** Preferred city (illustrative — not applied to the mock weather). */
+  /** Preferred city. Drives the live weather lookup in `graph` mode. */
   city: string;
-  /** Preferred country (illustrative — not applied to the mock weather). */
+  /** Preferred country, used to disambiguate the city when geocoding. */
   country: string;
   /** Panels currently shown in the full-screen dashboard. */
   visiblePanels: PanelId[];
+  /**
+   * Session override for the data source. `undefined` means "not chosen by the
+   * user", so the component's `dataSource` property wins.
+   */
+  dataSource?: MyDayDataSource;
 }
 
 export const DEFAULT_SETTINGS: IMyDaySettings = {
@@ -57,6 +64,18 @@ const sanitizePanels = (panels: unknown): PanelId[] => {
   return PANEL_IDS.filter((id) => panels.indexOf(id) !== -1);
 };
 
+const sanitizeDataSource = (value: unknown): MyDayDataSource | undefined =>
+  value === 'graph' || value === 'mock' ? value : undefined;
+
+/**
+ * The data source actually in effect: the user's session choice when they have
+ * made one, otherwise the value configured on the component.
+ */
+export const resolveDataSource = (
+  settings: IMyDaySettings,
+  configured?: MyDayDataSource
+): MyDayDataSource => settings.dataSource || configured || 'mock';
+
 /** Reads the settings from session storage, falling back to defaults. */
 export const loadSettings = (): IMyDaySettings => {
   const storage = getSessionStorage();
@@ -73,7 +92,8 @@ export const loadSettings = (): IMyDaySettings => {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      visiblePanels: sanitizePanels(parsed.visiblePanels)
+      visiblePanels: sanitizePanels(parsed.visiblePanels),
+      dataSource: sanitizeDataSource(parsed.dataSource)
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

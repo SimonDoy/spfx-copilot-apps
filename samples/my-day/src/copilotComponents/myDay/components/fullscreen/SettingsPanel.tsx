@@ -12,6 +12,7 @@ import {
 } from '@fluentui/react-components';
 import { Settings20Regular } from '@fluentui/react-icons';
 
+import type { MyDayDataSource } from '../../services/IMyDayDataService';
 import type { IMyDaySettings, PanelId } from '../../utils/settings';
 import RightPanel from './RightPanel';
 
@@ -47,12 +48,17 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '12px'
+  },
+  hint: {
+    color: tokens.colorNeutralForeground3
   }
 });
 
 export interface ISettingsPanelProps {
   /** Current session-backed settings. */
   settings: IMyDaySettings;
+  /** Data source currently in effect (session choice, or the configured default). */
+  dataSource: MyDayDataSource;
   /** Applies a partial update to the session-backed settings. */
   onChange: (patch: Partial<IMyDaySettings>) => void;
   onDismiss: () => void;
@@ -66,6 +72,7 @@ export interface ISettingsPanelProps {
  */
 const SettingsPanel: React.FunctionComponent<ISettingsPanelProps> = ({
   settings,
+  dataSource,
   onChange,
   onDismiss
 }) => {
@@ -93,6 +100,25 @@ const SettingsPanel: React.FunctionComponent<ISettingsPanelProps> = ({
       onDismiss={onDismiss}
       footnote="Stored in this browser session only — not saved permanently."
     >
+      <div className={styles.section}>
+        <Text className={styles.sectionTitle}>Data source</Text>
+        <Switch
+          checked={dataSource === 'graph'}
+          label={
+            dataSource === 'graph'
+              ? 'Live data from Microsoft Graph'
+              : 'Demo data (no permissions needed)'
+          }
+          onChange={(_, d) => onChange({ dataSource: d.checked ? 'graph' : 'mock' })}
+        />
+        <Text size={200} className={styles.hint}>
+          Live mode reads your calendar, tasks, mail and news as you, and needs the
+          Microsoft Graph permissions approved by an admin.
+        </Text>
+      </div>
+
+      <Divider className={styles.divider} />
+
       <div className={styles.section}>
         <Text className={styles.sectionTitle}>Temperature unit</Text>
         <Switch

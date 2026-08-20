@@ -1,13 +1,22 @@
 import * as React from 'react';
 
-import { makeStyles, mergeClasses, tokens, Text } from '@fluentui/react-components';
+import {
+  makeStyles,
+  mergeClasses,
+  MessageBar,
+  MessageBarBody,
+  Spinner,
+  tokens,
+  Text
+} from '@fluentui/react-components';
 import type { SPCopilotTheme } from '@microsoft/sp-copilot-component';
 
 import type { IMyDayCopilotComponentProperties } from '../MyDayCopilotComponentProperties';
 import type { IUser } from '../models/myDay';
-import { MockMyDayDataService } from '../services/MockMyDayDataService';
+import type { IMyDayDataService, MyDayDataSource } from '../services/IMyDayDataService';
+import { useMyDayData } from '../services/useMyDayData';
 import { fadeInUp } from '../utils/motion';
-import { useMyDaySettings, type PanelId } from '../utils/settings';
+import { resolveDataSource, useMyDaySettings, type PanelId } from '../utils/settings';
 import AgendaTimeline from './fullscreen/AgendaTimeline';
 import FullscreenHero from './fullscreen/FullscreenHero';
 import ImportantMail from './fullscreen/ImportantMail';
@@ -25,6 +34,8 @@ import TasksPanel from './fullscreen/TasksPanel';
 export interface IMyDayFullscreenProps extends IMyDayCopilotComponentProperties {
   /** Signed-in user resolved from the SPFx page context. */
   currentUser?: IUser;
+  /** Builds (and caches) the data service for a source. */
+  createDataService: (source: MyDayDataSource) => IMyDayDataService;
   /** Color theme advertised by the Copilot host. */
   theme?: SPCopilotTheme;
 }
@@ -122,11 +133,18 @@ const useStyles = makeStyles({
     ':hover': {
       textDecorationLine: 'underline'
     }
+  },
+  loading: {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '48px 0'
+  },
+  issues: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
   }
 });
-
-/** Single shared mock data service instance for the fullscreen view. */
-const dataService = new MockMyDayDataService();
 
 /**
  * Fullscreen display-mode view: a responsive dashboard with the time-aware hero,
@@ -136,18 +154,24 @@ const dataService = new MockMyDayDataService();
  */
 const MyDayFullscreen: React.FunctionComponent<IMyDayFullscreenProps> = (props) => {
   const styles = useStyles();
-  const { currentUser } = props;
+  const { currentUser, createDataService, dataSource } = props;
 
   const [openPanel, setOpenPanel] = React.useState<OpenPanel>('none');
   const [settings, updateSettings] = useMyDaySettings();
 
-  // Resolve the mock data once per mount against the current clock so relative
-  // times stay live and future-biased.
+  // Resolve the data once per mount against the current clock so relative times
+  // stay live and future-biased.
   const now = React.useMemo(() => new Date(), []);
-  const data = React.useMemo(() => {
-    const myDay = dataService.getMyDay(now);
-    return currentUser ? { ...myDay, user: currentUser } : myDay;
-  }, [now, currentUser]);
+  const source = resolveDataSource(settings, dataSource);
+  const service = React.useMemo(
+    () => createDataService(source),
+    [createDataService, source]
+  );
+  const location = React.useMemo(
+    () => ({ city: settings.city, country: settings.country }),
+    [settings.city, settings.country]
+  );
+  const { data, loading } = useMyDayData(service, now, currentUser, { location });
 
   const isPanelVisible = (id: PanelId): boolean =>
     settings.visiblePanels.indexOf(id) !== -1;
@@ -214,16 +238,36 @@ const MyDayFullscreen: React.FunctionComponent<IMyDayFullscreenProps> = (props) 
             />
           </div>
 
+          {data.issues && data.issues.length > 0 && (
+            <div className={styles.issues}>
+              {data.issues.map((issue) => (
+                <MessageBar key={issue.section} intent="info">
+                  <MessageBarBody>{issue.message}</MessageBarBody>
+                </MessageBar>
+              ))}
+            </div>
+          )}
+
           {isPanelVisible('planMyDay') && (
             <div className={enterAt(1)}>
               <PlanYourDayBanner data={data} now={now} onPlan={() => setOpenPanel('plan')} />
             </div>
           )}
 
-          {columns.length > 0 && <div className={styles.grid}>{columns}</div>}
+          {loading ? (
+            <div className={styles.loading}>
+              <Spinner label="Loading your day…" />
+            </div>
+          ) : (
+            columns.length > 0 && <div className={styles.grid}>{columns}</div>
+          )}
 
           <div className={styles.footer}>
-            <Text size={200}>AI-generated data for the scenario demo</Text>
+            <Text size={200}>
+              {source === 'graph'
+                ? 'Live data from Microsoft Graph'
+                : 'AI-generated data for the scenario demo'}
+            </Text>
             <span className={styles.footerDot}>·</span>
             <Text size={200}>Data structures aligned with Microsoft Graph</Text>
             <span className={styles.footerDot}>·</span>
@@ -245,6 +289,7 @@ const MyDayFullscreen: React.FunctionComponent<IMyDayFullscreenProps> = (props) 
       {openPanel === 'settings' && (
         <SettingsPanel
           settings={settings}
+          dataSource={source}
           onChange={updateSettings}
           onDismiss={() => setOpenPanel('none')}
         />

@@ -76,6 +76,20 @@ export interface IMyDayData {
   mail: IMailItem[];
   weather?: IWeather;
   quickActions?: IQuickAction[];
+  /** Non-fatal problems encountered while loading (live mode only). */
+  issues?: IMyDayDataIssue[];
+}
+
+/** Sections that can fail independently when reading from a live source. */
+export type MyDaySection = 'meetings' | 'tasks' | 'mail' | 'news' | 'weather';
+
+/**
+ * A section that could not be loaded. Surfaced to the user as an informational
+ * message rather than an error state — the rest of the dashboard still renders.
+ */
+export interface IMyDayDataIssue {
+  section: MyDaySection;
+  message: string;
 }
 
 /** Current-conditions weather shown in the full-screen hero (mock only). */
