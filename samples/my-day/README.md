@@ -1,6 +1,6 @@
 # My Day - Personalized Intranet Copilot App
 
-![SPFx](https://img.shields.io/badge/version-1.24.0--beta.2-yellow.svg) ![Node](https://img.shields.io/badge/Node.js-22.x-339933.svg) ![React](https://img.shields.io/badge/React-17-61DAFB.svg) ![Data](https://img.shields.io/badge/Data-Mockup-2D9CDB.svg) ![Modes](https://img.shields.io/badge/Modes-inline%20%2B%20fullscreen-5B3EE8.svg)
+![SPFx](https://img.shields.io/badge/version-1.24.0--beta.2-yellow.svg) ![Node](https://img.shields.io/badge/Node.js-22.x-339933.svg) ![React](https://img.shields.io/badge/React-17-61DAFB.svg) ![Data](https://img.shields.io/badge/Data-Mock%20%2B%20Microsoft%20Graph-2D9CDB.svg) ![Modes](https://img.shields.io/badge/Modes-inline%20%2B%20fullscreen-5B3EE8.svg)
 
 ## Summary
 
@@ -11,7 +11,7 @@ The same React component renders in two modes inside the Copilot canvas:
 - a compact **inline** card, and
 - an immersive **full-screen** dashboard with a **"Plan my day"** focus assistant and a **settings** drawer.
 
-The sample ships with **mocked data** so anyone can deploy and demo in minutes - no line-of-business integration required. The data is served through a swappable `IMyDayDataService` interface, so the mock implementation can be replaced by a live Microsoft Graph / SharePoint implementation without touching the UI.
+The sample ships with **mocked data** so anyone can deploy and demo in minutes - no line-of-business integration required. The data is served through a swappable `IMyDayDataService` interface, and a **live Microsoft Graph implementation is included**: flip one setting (or one component property) and the same UI reads your real calendar, tasks, mail, news and weather. See [Data source](#data-source).
 
 ![Concept mockup](./assets/introduction.png)
 
@@ -105,7 +105,7 @@ A tight, repeatable flow for a live demo. All data is mock, so it works the same
 2. **Land the personal hook** (~10s) - call out the greeting using the **real signed-in user's name and photo**, the time-aware sub-line, and the dynamic summary ("You have 3 meetings and 2 high-priority tasks ahead."). Tap a tile (Next meeting / Tasks) to show the inline drill-down, then back.
 3. **Expand** (~10s) - click the **expand** control on the greeting card. The **full-screen dashboard** animates in - agenda timeline, tasks completion ring, important mail with face avatars, a news wall with real thumbnails, and the weather card.
 4. **The "wow" moment** (~15s) - click **Plan my day**. Watch the assistant "think" and then **stream in** a prioritized, deterministic focus briefing that opens with the user's name and reads as one connected story (prep the Design Review → review the inline-view PR → polish the demo script → reply to Megan).
-5. **Show settings shaping the UX** (~15s) - open the **gear** ⚙️. Toggle **°C / °F** and point out the hero weather updating live; uncheck a panel (e.g. **News**) and watch the layout **re-flow**. Note the footnote: settings are stored in this browser **session only**.
+5. **Show settings shaping the UX** (~15s) - open the **gear** ⚙️. Toggle **°C / °F** and point out the hero weather updating live; uncheck a panel (e.g. **News**) and watch the layout **re-flow**. Note the footnote: settings are stored in this browser **session only**. If your tenant has consented to the Graph scopes, flip **Data source** to live and show the very same dashboard on the presenter's real day.
 6. **Theming** (~10s) - flip the Copilot host to **dark mode** to show the whole experience re-theme instantly.
 
 > Tip: the day is always "today" and time-of-day aware, so the agenda, greeting and Plan my day stay believable whenever you demo.
@@ -118,7 +118,9 @@ This sample illustrates the following concepts:
 
 - **Copilot Component UX** - a `CopilotComponent` (`copilotType: "Ux"`) surfaced as a tool a declarative agent can call, rendering its own React UI inside the Copilot host.
 - **Display-mode-aware rendering** - a single root React component selects a dedicated **inline** or **full-screen** view from the host-advertised display mode; inline can request expansion via `requestDisplayModeAsync('fullscreen')`.
-- **Swappable data service** - all data flows through an `IMyDayDataService` interface (mock implementation shipped), so a live Microsoft Graph / SharePoint implementation can be dropped in without changing the UI.
+- **Swappable data service** - all data flows through an `IMyDayDataService` interface with **two shipped implementations**: `MockMyDayDataService` (bundled demo data, the default) and `GraphMyDayDataService` (live Microsoft Graph). The UI is identical for both, and the source is switchable at runtime.
+- **Brokered SSO to Microsoft Graph** - in live mode the calendar, To Do tasks, inbox and SharePoint news posts are read as the signed-in user through the SPFx-brokered `MSGraphClientV3` client, with no manual token handling.
+- **Resilient live data** - the four Graph sections load concurrently and fail independently: a rejected section shows an empty panel plus an informational message bar rather than breaking the dashboard.
 - **Theme awareness** - light/dark theme driven by the Copilot host context, using Fluent UI v9 theme tokens (no hardcoded colors).
 - **"Plan my day" focus assistant** - a read-only, deterministically generated focus briefing derived from the day's mock data (no chat, no real AI/WorkIQ call) that shifts with the time of day.
 - **Session-persisted settings** - a settings drawer whose values are **intentionally** stored in the browser session (`sessionStorage`) to show how configuration can shape the dashboard, without any server-side persistence.
@@ -141,7 +143,8 @@ Responsive card grid - Agenda (today's timeline), Tasks (checklist + completion 
 The settings drawer is **controlled by session-scoped state** (`sessionStorage`), intentionally chosen for the demo so changes survive reloads within the session but are forgotten when it ends:
 
 - **Temperature unit** (°C / °F) - applied live to the hero weather card.
-- **Location** (city / country) - illustrative inputs, persisted for the session.
+- **Data source** (demo / live) - switches between the bundled mock data and live Microsoft Graph data.
+- **Location** (city / country) - drives the live weather lookup in live mode; illustrative in demo mode.
 - **Visible panels** - toggles each dashboard panel; the layout re-flows dynamically and at least one panel always stays visible.
 
 ### Wireframe
@@ -156,15 +159,49 @@ FULL    ┌ Agenda timeline ┐┌ Tasks ◔ ┐┌ News wall ┐
 
 ## Data source
 
-All data is **mocked** for the sample and served through the `IMyDayDataService` interface (`MockMyDayDataService`), so the views never call an API directly. The mock is shaped to mirror Microsoft Graph so a live implementation is a drop-in replacement:
+My Day reads everything through the `IMyDayDataService` interface, so the views never call an API directly. Two implementations ship:
 
-- user → `/me` + `/me/photo/$value`
-- calendar → `/me/events` (or `/me/calendarView`)
-- tasks → `/me/todo/lists/{id}/tasks`
-- mail → `/me/messages`
-- news → SharePoint site pages / a **`News`** list
+| | `MockMyDayDataService` (default) | `GraphMyDayDataService` |
+| --- | --- | --- |
+| Data | Bundled, time-resolved demo data | Live, read as the signed-in user |
+| Permissions | None | Microsoft Graph scopes below, admin-approved |
+| Best for | Demos, first deployment | Real personal dashboards |
 
-The **"Plan my day"** briefing is produced by a pure `planMyDay(data, now)` function (deterministic, derived from the mock) - no real AI/WorkIQ call is made.
+Both feed the **same mappers**, so the mock is shaped exactly like the live payloads:
+
+| Section | Live source |
+| --- | --- |
+| User | SPFx page context + `userphoto.aspx` (no Graph call) |
+| Meetings | `GET /me/calendarView` for today, in the user's own time zone |
+| Tasks | `GET /me/todo/lists` → default list → `GET /me/todo/lists/{id}/tasks` |
+| Mail | `GET /me/mailFolders/inbox/messages`, narrowed to unread / high importance |
+| News | `GET /sites/{id}/pages/microsoft.graph.sitePage`, filtered to news posts |
+| Weather | [Open-Meteo](https://open-meteo.com/) - free, keyless, CORS-enabled |
+| Quick actions | Static tiles (illustrative in both modes) |
+
+### Switching to live data
+
+Two ways, either is enough:
+
+- **In the UI** - open the **settings** drawer and turn **Data source** on. The choice is stored for the browser session, like the other settings.
+- **On the component** - set the `dataSource` tool property to `"graph"` (it defaults to `"mock"`). Optionally set `newsSiteUrl` to the absolute URL of the SharePoint site to read news from; when omitted, the tenant root site is used.
+
+### Required permissions
+
+Live mode needs these delegated Microsoft Graph scopes, declared in [config/package-solution.json](./config/package-solution.json) and **approved by a tenant admin** in the SharePoint admin centre (**Advanced → API access**):
+
+| Scope | Used for |
+| --- | --- |
+| `Calendars.Read` | Today's meetings |
+| `Tasks.Read` | Open To Do tasks |
+| `Mail.Read` | Important inbox mail |
+| `Sites.Read.All` | SharePoint news posts |
+
+The default mock mode needs **none** of these - the sample still deploys and demos with zero consent. If the scopes are not approved, live mode degrades gracefully: each unavailable section renders empty with an informational message instead of failing.
+
+> Weather calls the public Open-Meteo endpoints anonymously (no credentials are attached). If your network blocks them, the hero falls back to the demo weather.
+
+The **"Plan my day"** briefing is produced by a pure `planMyDay(data, now)` function (deterministic, derived from whichever data is loaded) - no real AI/WorkIQ call is made.
 
 ## Solution structure
 
@@ -189,7 +226,7 @@ samples/my-day/
           inline/               # inline building blocks (greeting, summary, lists)
           fullscreen/           # dashboard cards, Plan my day + settings drawers
         models/                 # Graph-shaped + UI view models
-        services/               # IMyDayDataService, mock service, planMyDay, mappers
+        services/               # data service interface, mock + Graph providers, weather, planMyDay, mappers
         mockData/               # static mock data (meetings, tasks, news, mail, weather…)
         utils/                  # datetime, greeting, session-persisted settings
 ```

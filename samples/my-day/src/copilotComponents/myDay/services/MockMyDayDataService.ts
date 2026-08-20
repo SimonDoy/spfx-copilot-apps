@@ -5,19 +5,12 @@ import { mapMail, mapMeeting, mapNews, mapTask, mapUser } from './mappers';
 import { resolveEvents, resolveMail, resolveNews, resolveTasks } from './resolveMockData';
 
 /**
- * Mock implementation of {@link IMyDayDataService}. Imports the bundled mock
- * data, resolves relative time offsets against `now`, then maps the Graph-shaped
- * objects to view models — so the demo is always live and future-biased.
- */
-export class MockMyDayDataService implements IMyDayDataService {
-  public async getMyDay(now: Date = new Date()): Promise<IMyDayData> {
-    return buildMockMyDay(now);
-  }
-}
-
-/**
- * Builds the mock aggregate synchronously. Exported so the Graph provider can
- * reuse individual sections as a fallback when a live call fails.
+ * Builds the mock aggregate synchronously: resolves the bundled mock data's
+ * relative time offsets against `now`, then maps the Graph-shaped objects to
+ * view models — so the demo is always live and future-biased.
+ *
+ * Also used as the render-ready starting state and as the fallback when live
+ * data cannot be loaded at all.
  */
 export const buildMockMyDay = (now: Date = new Date()): IMyDayData => {
   const meetings = resolveEvents(mockEvents, now)
@@ -44,3 +37,10 @@ export const buildMockMyDay = (now: Date = new Date()): IMyDayData => {
     quickActions: mockQuickActions
   };
 };
+
+/** Mock implementation of {@link IMyDayDataService}. Needs no permissions. */
+export class MockMyDayDataService implements IMyDayDataService {
+  public async getMyDay(now: Date = new Date()): Promise<IMyDayData> {
+    return buildMockMyDay(now);
+  }
+}

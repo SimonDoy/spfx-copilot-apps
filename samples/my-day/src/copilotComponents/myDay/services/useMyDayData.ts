@@ -41,7 +41,6 @@ export const useMyDayData = (
     service
       .getMyDay(now, { location })
       .catch((error: unknown) => {
-        // eslint-disable-next-line no-console
         console.warn('[My Day] Falling back to demo data:', error);
         return {
           ...buildMockMyDay(now),

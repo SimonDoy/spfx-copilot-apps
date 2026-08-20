@@ -146,7 +146,6 @@ export class GraphMyDayDataService implements IMyDayDataService {
     try {
       return await run();
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.warn(`[My Day] Failed to load ${section}:`, error);
       issues.push({
         section,

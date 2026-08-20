@@ -1,6 +1,6 @@
 # Plan — `GraphMyDayDataService` (live Microsoft Graph data)
 
-**Status:** approved (all five open questions answered) — implementation in progress.
+**Status:** implemented. Build, lint and type-check are clean.
 
 Approved answers: (1) async contract yes; (2) all four Graph permissions yes;
 (3) Settings-drawer toggle yes; (4) configurable news site yes; (5) weather
