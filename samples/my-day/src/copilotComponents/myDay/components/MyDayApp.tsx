@@ -6,6 +6,7 @@ import type { IMyDayCopilotComponentProperties } from '../MyDayCopilotComponentP
 import type { IUser } from '../models/myDay';
 import type { IMyDayDataService, MyDayDataSource } from '../services/IMyDayDataService';
 import { MockMyDayDataService } from '../services/MockMyDayDataService';
+import MyDayErrorBoundary from './MyDayErrorBoundary';
 import MyDayFullscreen from './MyDayFullscreen';
 import MyDayInline from './MyDayInline';
 import MyDayThemeProvider from './MyDayThemeProvider';
@@ -56,27 +57,32 @@ const MyDayApp: React.FunctionComponent<IMyDayAppProps> = (props) => {
     onRequestFullscreen
   } = props;
 
-  const view =
-    displayMode === 'fullscreen' ? (
-      <MyDayFullscreen
-        message={message}
-        dataSource={dataSource}
-        currentUser={currentUser}
-        createDataService={createDataService}
-        theme={theme}
-      />
-    ) : (
-      <MyDayInline
-        message={message}
-        dataSource={dataSource}
-        currentUser={currentUser}
-        createDataService={createDataService}
-        theme={theme}
-        onRequestFullscreen={onRequestFullscreen}
-      />
-    );
+  const isFullscreen = displayMode === 'fullscreen';
 
-  return <MyDayThemeProvider theme={theme}>{view}</MyDayThemeProvider>;
+  const view = isFullscreen ? (
+    <MyDayFullscreen
+      message={message}
+      dataSource={dataSource}
+      currentUser={currentUser}
+      createDataService={createDataService}
+      theme={theme}
+    />
+  ) : (
+    <MyDayInline
+      message={message}
+      dataSource={dataSource}
+      currentUser={currentUser}
+      createDataService={createDataService}
+      theme={theme}
+      onRequestFullscreen={onRequestFullscreen}
+    />
+  );
+
+  return (
+    <MyDayThemeProvider theme={theme}>
+      <MyDayErrorBoundary compact={!isFullscreen}>{view}</MyDayErrorBoundary>
+    </MyDayThemeProvider>
+  );
 };
 
 export default MyDayApp;
