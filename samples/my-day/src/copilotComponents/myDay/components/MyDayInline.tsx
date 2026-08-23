@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { makeStyles, Spinner, tokens } from '@fluentui/react-components';
+import { makeStyles, MessageBar, MessageBarBody, tokens } from '@fluentui/react-components';
 import type { SPCopilotTheme } from '@microsoft/sp-copilot-component';
 
 import type { IMyDayCopilotComponentProperties } from '../MyDayCopilotComponentProperties';
@@ -15,6 +15,7 @@ import InlineDetailHeader from './inline/InlineDetailHeader';
 import InlineSummary from './inline/InlineSummary';
 import NewsList from './inline/NewsList';
 import type { InlineView } from './inline/views';
+import MyDayLoadingState from './MyDayLoadingState';
 
 /**
  * Props for the {@link MyDayInline} view rendered when the host display mode is
@@ -49,10 +50,11 @@ const useStyles = makeStyles({
       animationDuration: '1ms'
     }
   },
-  loading: {
+  issues: {
     display: 'flex',
-    justifyContent: 'center',
-    padding: '32px 0'
+    flexDirection: 'column',
+    gap: '8px',
+    marginBottom: '12px'
   }
 });
 
@@ -88,11 +90,7 @@ const MyDayInline: React.FunctionComponent<IMyDayInlineProps> = (props) => {
 
   let content: React.ReactNode;
   if (loading) {
-    content = (
-      <div className={styles.loading}>
-        <Spinner size="tiny" label="Loading your day…" />
-      </div>
-    );
+    content = <MyDayLoadingState label="Loading your day…" compact />;
   } else {
     switch (view) {
       case 'meetings':
@@ -128,6 +126,15 @@ const MyDayInline: React.FunctionComponent<IMyDayInlineProps> = (props) => {
 
   return (
     <div className={styles.surface} data-display-mode="inline">
+      {!loading && data.issues && data.issues.length > 0 && (
+        <div className={styles.issues}>
+          {data.issues.map((issue) => (
+            <MessageBar key={issue.section} intent="warning">
+              <MessageBarBody>{issue.message}</MessageBarBody>
+            </MessageBar>
+          ))}
+        </div>
+      )}
       {view === 'summary' || loading ? (
         content
       ) : (

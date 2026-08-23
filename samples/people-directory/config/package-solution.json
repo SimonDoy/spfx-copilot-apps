@@ -3,7 +3,7 @@
   "solution": {
     "name": "people-directory-client-side-solution",
     "id": "4eab5cc8-290c-42de-9e66-eff0dd662891",
-    "version": "1.0.0.0",
+    "version": "1.0.4.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,

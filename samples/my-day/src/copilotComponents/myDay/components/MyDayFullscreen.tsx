@@ -5,7 +5,6 @@ import {
   mergeClasses,
   MessageBar,
   MessageBarBody,
-  Spinner,
   tokens,
   Text
 } from '@fluentui/react-components';
@@ -26,6 +25,7 @@ import PlanYourDayBanner from './fullscreen/PlanYourDayBanner';
 import QuickActionsPanel from './fullscreen/QuickActionsPanel';
 import SettingsPanel from './fullscreen/SettingsPanel';
 import TasksPanel from './fullscreen/TasksPanel';
+import MyDayLoadingState from './MyDayLoadingState';
 
 /**
  * Props for the {@link MyDayFullscreen} view rendered when the host display mode
@@ -134,11 +134,6 @@ const useStyles = makeStyles({
       textDecorationLine: 'underline'
     }
   },
-  loading: {
-    display: 'flex',
-    justifyContent: 'center',
-    padding: '48px 0'
-  },
   issues: {
     display: 'flex',
     flexDirection: 'column',
@@ -238,10 +233,10 @@ const MyDayFullscreen: React.FunctionComponent<IMyDayFullscreenProps> = (props) 
             />
           </div>
 
-          {data.issues && data.issues.length > 0 && (
+          {!loading && data.issues && data.issues.length > 0 && (
             <div className={styles.issues}>
               {data.issues.map((issue) => (
-                <MessageBar key={issue.section} intent="info">
+                <MessageBar key={issue.section} intent="warning">
                   <MessageBarBody>{issue.message}</MessageBarBody>
                 </MessageBar>
               ))}
@@ -255,9 +250,7 @@ const MyDayFullscreen: React.FunctionComponent<IMyDayFullscreenProps> = (props) 
           )}
 
           {loading ? (
-            <div className={styles.loading}>
-              <Spinner label="Loading your day…" />
-            </div>
+            <MyDayLoadingState label="Putting your day together…" />
           ) : (
             columns.length > 0 && <div className={styles.grid}>{columns}</div>
           )}

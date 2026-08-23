@@ -3,7 +3,7 @@
   "solution": {
     "name": "my-day-client-side-solution",
     "id": "20739318-a47a-41d4-93a8-a9739e34fe95",
-    "version": "2.2.0.0",
+    "version": "2.9.3.0",
     "includeClientSideAssets": true,
     "skipFeatureDeployment": true,
     "isDomainIsolated": false,

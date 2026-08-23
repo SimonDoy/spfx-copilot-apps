@@ -39,7 +39,19 @@ export const createMyDayDataService = (
     if (!response.ok) {
       throw new Error(`Weather request failed with ${response.status}`);
     }
-    return response.json();
+
+    // A body that is empty or not valid JSON (e.g. a proxy/CORS hiccup
+    // returning no content) must surface as a clean error, not a raw
+    // "Unexpected end of JSON..." SyntaxError from `.json()`.
+    const text = await response.text();
+    if (!text) {
+      throw new Error('Weather request returned an empty response.');
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('Weather request returned an invalid response.');
+    }
   };
 
   return new GraphMyDayDataService(context.msGraphClientFactory, {

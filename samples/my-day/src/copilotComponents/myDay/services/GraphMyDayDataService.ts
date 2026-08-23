@@ -2,16 +2,9 @@ import type { MSGraphClientFactory, MSGraphClientV3 } from '@microsoft/sp-http';
 
 import { mockQuickActions } from '../mockData';
 import type { IMyDayData, IMyDayDataIssue, IUser, MyDaySection } from '../models/myDay';
-import { buildUserPhotoUrl } from './CurrentUserService';
-import {
-  fetchImportantMail,
-  fetchNews,
-  fetchOpenTasks,
-  fetchTodaysEvents,
-  resolveSiteId
-} from './graphQueries';
+import { fetchTodaysEvents } from './graphQueries';
 import type { IMyDayDataService, IMyDayQueryOptions } from './IMyDayDataService';
-import { mapMail, mapMeeting, mapNews, mapTask } from './mappers';
+import { mapMeeting } from './mappers';
 import type { IWeatherService } from './OpenMeteoWeatherService';
 
 export interface IGraphMyDayDataServiceOptions {
@@ -27,6 +20,31 @@ export interface IGraphMyDayDataServiceOptions {
 
 /** How long a resolved result is reused, so inline → fullscreen does not re-query. */
 const CACHE_TTL_MS = 60_000;
+
+/**
+ * How long to wait for a Graph client (i.e. a signed-in token) before giving
+ * up. The underlying MSAL/AadHttpClient silent flow can hang far longer than
+ * this (e.g. `BrowserAuthError: monitor_window_timeout` inside a nested
+ * iframe), which would otherwise leave the dashboard on the loading screen
+ * indefinitely.
+ */
+const CLIENT_TIMEOUT_MS = 8_000;
+
+/** Rejects with `message` if `promise` has not settled within `ms`. */
+const withTimeout = <T>(promise: Promise<T>, ms: number, message: string): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    );
+  });
 
 const SECTION_LABELS: { [K in MyDaySection]: string } = {
   meetings: 'Your calendar',
@@ -47,7 +65,6 @@ const SECTION_LABELS: { [K in MyDaySection]: string } = {
 export class GraphMyDayDataService implements IMyDayDataService {
   private readonly clientFactory: MSGraphClientFactory;
   private readonly options: IGraphMyDayDataServiceOptions;
-  private clientPromise: Promise<MSGraphClientV3> | undefined;
   private cache: { key: string; at: number; data: Promise<IMyDayData> } | undefined;
 
   public constructor(
@@ -56,6 +73,7 @@ export class GraphMyDayDataService implements IMyDayDataService {
   ) {
     this.clientFactory = clientFactory;
     this.options = options;
+     console.log('GraphMyDayDataService constructed', { options });
   }
 
   public async getMyDay(
@@ -71,57 +89,33 @@ export class GraphMyDayDataService implements IMyDayDataService {
 
     const data = this.load(now, queryOptions);
     this.cache = { key, at: Date.now(), data };
+    // A failed load must not be replayed for the full TTL — let the next call
+    // (retry, or the inline ↔ fullscreen switch) try again from scratch.
+    data.catch(() => {
+      if (this.cache && this.cache.data === data) {
+        this.cache = undefined;
+      }
+    });
     return data;
   }
 
   private getClient(): Promise<MSGraphClientV3> {
-    const existing = this.clientPromise;
-    if (existing) {
-      return existing;
-    }
-
-    const created = this.clientFactory.getClient('3');
-    this.clientPromise = created;
-    return created;
+    return withTimeout(
+      this.clientFactory.getClient('3'),
+      CLIENT_TIMEOUT_MS,
+      'Timed out getting a Microsoft Graph client (sign-in did not complete in time).'
+    );
   }
 
   private async load(now: Date, queryOptions?: IMyDayQueryOptions): Promise<IMyDayData> {
     const issues: IMyDayDataIssue[] = [];
-    const client = await this.getClient();
 
-    const photoUrl = (email: string): string | undefined =>
-      buildUserPhotoUrl(this.options.webAbsoluteUrl, email, 'S');
-
-    const [meetings, tasks, mail, news, weather] = await Promise.all([
-      this.section('meetings', issues, [], async () =>
-        (await fetchTodaysEvents(client, now))
-          .map(mapMeeting)
-          .sort((a, b) => a.start.getTime() - b.start.getTime())
-      ),
-      this.section('tasks', issues, [], async () =>
-        (await fetchOpenTasks(client)).map(mapTask)
-      ),
-      this.section('mail', issues, [], async () =>
-        (await fetchImportantMail(client))
-          .map((m) => ({ ...mapMail(m), senderPhotoUrl: photoUrl(m.from.emailAddress.address) }))
-          .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())
-      ),
-      this.section('news', issues, [], async () => {
-        const siteId = await resolveSiteId(client, this.options.newsSiteUrl);
-        if (!siteId) {
-          return [];
-        }
-        return (await fetchNews(client, siteId, photoUrl))
-          .map(mapNews)
-          .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-      }),
-      this.section('weather', issues, undefined, async () => {
-        const location = queryOptions?.location;
-        if (!this.options.weatherService || !location?.city) {
-          return undefined;
-        }
-        return this.options.weatherService.getWeather(location.city, location.country);
-      })
+    // TEMP: only loading calendar items right now to isolate load-time issues.
+    // Tasks/mail/news/weather are skipped below (loadGraphSections / weather
+    // section) until this is reverted.
+    const [{ meetings, tasks, mail, news }, weather] = await Promise.all([
+      this.loadGraphSections(now, issues),
+      Promise.resolve(undefined)
     ]);
 
     return {
@@ -136,6 +130,41 @@ export class GraphMyDayDataService implements IMyDayDataService {
     };
   }
 
+  /**
+   * Loads the four sections that need a signed-in Graph client. If the client
+   * itself cannot be acquired (e.g. a timed-out/failed silent sign-in), each
+   * section is recorded as its own issue and resolves empty instead of
+   * rejecting the whole load — the dashboard still renders with weather intact.
+   */
+  private async loadGraphSections(
+    now: Date,
+    issues: IMyDayDataIssue[]
+  ): Promise<Pick<IMyDayData, 'meetings' | 'tasks' | 'mail' | 'news'>> {
+    let client: MSGraphClientV3;
+    try {
+      console.log('[My Day] Acquiring a Microsoft Graph client…');
+      client = await this.getClient();
+    } catch (error) {
+      console.warn('[My Day] Failed to acquire a Microsoft Graph client:', error);
+      (['meetings', 'tasks', 'mail', 'news'] as const).forEach((section) => {
+        issues.push({
+          section,
+          message: `${SECTION_LABELS[section]} could not be loaded right now.`
+        });
+      });
+      return { meetings: [], tasks: [], mail: [], news: [] };
+    }
+
+    // TEMP: only loading calendar items right now to isolate load-time issues.
+    const meetings = await this.section('meetings', issues, [], async () =>
+      (await fetchTodaysEvents(client, now))
+        .map(mapMeeting)
+        .sort((a, b) => a.start.getTime() - b.start.getTime())
+    );
+
+    return { meetings, tasks: [], mail: [], news: [] };
+  }
+
   /** Runs one section, recording an issue and returning `fallback` on failure. */
   private async section<T>(
     section: MyDaySection,
@@ -143,6 +172,7 @@ export class GraphMyDayDataService implements IMyDayDataService {
     fallback: T,
     run: () => Promise<T>
   ): Promise<T> {
+    console.log(`[My Day] Loading ${section}…`);
     try {
       return await run();
     } catch (error) {

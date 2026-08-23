@@ -1,7 +1,7 @@
 {
-  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.24/MicrosoftTeams.schema.json",
-  "manifestVersion": "1.24",
-  "version": "2.2.0",
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.29/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.29",
+  "version": "2.9.3",
   "id": "6aae00b7-e2d7-4481-913a-896db5eba2bd",
   "developer": {
     "name": "Contoso",
@@ -31,9 +31,5 @@
     ]
   },
   "permissions": ["identity"],
-  "validDomains": [
-    "sharepoint.com",
-    "graph.microsoft.com",
-    "open-meteo.com"
-  ]
+  "validDomains": []
 }

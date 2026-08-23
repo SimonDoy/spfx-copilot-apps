@@ -15,6 +15,11 @@ import { MockMyDayDataService } from './services/MockMyDayDataService';
 export default class MyDayCopilotComponent extends BaseCopilotComponent<IMyDayCopilotComponentProperties> {
   private readonly _services: Map<MyDayDataSource, IMyDayDataService> = new Map();
 
+  public constructor() {
+    super();
+    console.log('[My Day] MyDayCopilotComponent created');
+  }
+
   protected render(): void {
     let element: React.ReactElement;
 
